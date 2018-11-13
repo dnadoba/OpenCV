@@ -56,7 +56,7 @@ for filename in image_pair_paths:
     detected_keypoints.append(keypoints_cv2)
     descriptors.append(descriptors_cv2)
 
-    print(f"Found {len(keypoints_cv2)} keypoints in filename")
+    print(f"Found {len(keypoints_cv2)} keypoints in {filename}")
     img = cv2.imread(filename)
     images.append(img)
     image_with_keypoints = img.copy()
