@@ -113,6 +113,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# JetBrains IDE
+.idea
+
 # user defined cache and output directory
 cache/
 output/
