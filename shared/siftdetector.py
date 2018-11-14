@@ -4,6 +4,18 @@ from scipy import ndimage
 from scipy.stats import multivariate_normal
 from numpy.linalg import norm
 import numpy.linalg
+import cv2
+
+def to_cv2_kplist(kp):
+    return list(map(to_cv2_kp, kp))
+
+
+def to_cv2_kp(kp):
+    return cv2.KeyPoint(kp[1], kp[0], kp[2], kp[3]/np.pi*180)
+
+
+def to_cv2_di(di):
+    return np.asarray(di, np.float32)
 
 # INPUTS: imagename (filename of image, string) 
 #         threshold (constrast threshold, int or float)
