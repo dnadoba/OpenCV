@@ -6,10 +6,14 @@ sys.path.append('../shared')
 import siftdetector
 from once import once
 import cv2
+from functools import reduce
 
+def min_elm(smaller, itr):
+    return reduce(lambda smallest, current: smallest if smaller(smallest, current) else current, itr)
 
 def drawlines(img1, img2, lines, pts1, pts2):
     r, c, _ = img1.shape
+    print(r, c)
     # img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
     # img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
     for r, pt1, pt2 in zip(lines, pts1, pts2):
@@ -108,62 +112,50 @@ for threshold_matching in threshold_matchings:
     points2 = np.array(list(map(lambda keyPt: keyPt.pt, pts2)))
 
     F, mask = cv2.findFundamentalMat(points1, points2, method=cv2.FM_LMEDS)
-
-    lines = cv2.computeCorrespondEpilines(points2, 2, F)
+    points1 = points1[mask.ravel() == 1]
+    points2 = points2[mask.ravel() == 1]
+    lines = cv2.computeCorrespondEpilines(points1, 2, F)
 
     lines = lines.reshape(-1, 3)
-    img_with_lines2, img_with_lines1 = drawlines(images[1].copy(), images[0], lines, points1, points2)
-    cv2.imwrite(f"{output_dir}/{image_name_prefix}_{threshold_matching}_epilines.png", img_with_lines2)
+    img_with_lines1, img_with_lines2 = drawlines(images[0].copy(), images[1], lines, points1, points2)
+    cv2.imwrite(f"{output_dir}/{image_name_prefix}_{threshold_matching}_epilines.png", img_with_lines1)
     if show_images:
-        cv2.imshow("Image", img_with_lines2)
+        cv2.imshow("Image", img_with_lines1)
         cv2.waitKey(0)
+
 
     # Exercise 2
 
-
     E = K.T * np.mat(F) * K
 
-    retval, R, t, mask = cv2.recoverPose(E, points1, points2, K)
-    P0 = np.hstack((K, np.zeros((3, 1), dtype=float)))
-    P1 = np.matmul(K, np.hstack((R, t)))
-    pointcloud_homo = cv2.triangulatePoints(P0, P1, points1.T, points2.T)
-    pointcloud = cv2.convertPointsFromHomogeneous(pointcloud_homo.T)
-    write_ply(f"{output_dir}/{image_name_prefix}_{threshold_matching}_punktwolke.ply", pointcloud)
+    R1, R2, t = cv2.decomposeEssentialMat(E)
+    combinations = [
+        (R1,  t),
+        (R1, -t),
+        (R2, t),
+        (R2, -t),
+    ]
 
 
-    #
-    #
-    # R1, R2, t = cv2.decomposeEssentialMat(E)
-    # combinations = [
-    #     (R1,  t),
-    #     (R1, -t),
-    #     (R2, t),
-    #     (R2, -t),
-    # ]
-    # height, width, _ = images[0].shape
-    # print(width, height)
-    # results = []
-    # for (R, t) in combinations:
-    #     print(R, t)
-    #     P0 = np.hstack((K, np.zeros((3,1), dtype=float)))
-    #     P1 = np.matmul(K, np.hstack((R, t)))
-    #
-    #
-    #
-    #     pointcloud_homo = cv2.triangulatePoints(P0, P1, points1.T, points2.T)
-    #     pointcloud = cv2.convertPointsFromHomogeneous(pointcloud_homo.T)
-    #     imagePoints, jacobian = cv2.projectPoints(pointcloud, R, t.reshape(3), K, np.array([]))
-    #
-    #     points_in_image = 0
-    #     for imagePoint in imagePoints:
-    #         imagePoint = imagePoint[0]
-    #         x, y = imagePoint[0], imagePoint[1]
-    #         print(x, y)
-    #         if 0 <= x <= 1 and 0 <= y <= 1:
-    #             points_in_image += 1
-    #     print(points_in_image)
-    #
-    # break
+    results = []
+    for (R, t) in combinations:
+        P0 = np.hstack((K, np.zeros((3,1), dtype=float)))
+        P1 = np.matmul(K, np.hstack((R, t)))
+
+        pointcloud_homo = cv2.triangulatePoints(P0, P1, points1.T, points2.T)
+        pointcloud = cv2.convertPointsFromHomogeneous(pointcloud_homo.T).reshape(-1, 3)
+        point_count_in_image = 0
+        for point in pointcloud:
+            z = point[2]
+            if z >= 0:
+                point_count_in_image += 1
+
+        results.append((point_count_in_image, R, t, pointcloud))
+
+    _, R, t, pointcloud = min_elm(lambda lhs, rhs: lhs[0] < rhs[0], results)
+
+    write_ply(f"{output_dir}/{image_name_prefix}_{threshold_matching}_pointcloud.ply", pointcloud)
+
 
 
 
