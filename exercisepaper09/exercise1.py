@@ -19,14 +19,20 @@ property uchar green
 property uchar blue  
 end_header
 '''
+
+
 def write_ply(file, img, depth):
 
     with open(file, 'w') as f:
-        vert_num = img.shape[0] * img.shape[1]
-        f.write(ply_header % dict(vert_num=vert_num))
+
+        result = []
         for (y, (img_row, depth_row)) in enumerate(zip(img, depth)):
             for (x, (color, z)) in enumerate(zip(img_row, depth_row)):
-                f.write(f"{x} {y} {z} {color[2]} {color[1]} {color[0]}\n")
+                if z != 0:
+                    result.append([x, y, z, color[2], color[1], color[0]])
+
+        f.write(ply_header % dict(vert_num=len(result)))
+        np.savetxt(f, result, '%f %f %f %d %d %d')
 
 
 output_dir = 'output'
@@ -42,26 +48,46 @@ cy = 172.8
 
 tx = baseline = 0.54  # meter
 
+# Exercise 1
 
-for y in [5]:
-    for block_size in [12]:
+for y in [4]:  # [4, 5, 6]:
+    for block_size in [12]:  # [4, 8, 12, 16]:
         min_disp = 1 # 0-10 Gibt minimale Disparität an
         num_disp = 16 * y # Gibt maxinale Disparität an; immer vielfaches von 16
-
+        print(f"y({y}) block_size({block_size})")
         stereo = cv2.StereoSGBM_create(minDisparity=min_disp, numDisparities=num_disp, blockSize=block_size)
-        disparity = stereo.compute(img1, img2).astype(np.float32)/(y + 1/16) + 1
-        print(disparity.min(), disparity.max())
+        disparity = stereo.compute(img1, img2).astype(np.float32)/y
+
         disparity_img = cv2.applyColorMap(disparity.astype(np.uint8), cv2.COLORMAP_JET)
         cv2.imwrite(f'{output_dir}/disparity y({y}) block_size({block_size}).png', disparity_img)
 
-        depth = np.full(disparity.shape, f*tx, dtype=np.float32)/disparity
+        # Exercise 2
+        ftx = np.full(disparity.shape, f*tx, dtype=np.float32)
+        # ftx/disparity but set to zero where division by zero would occur
+        depth = np.divide(ftx, disparity, out=np.zeros_like(ftx), where=disparity != 0)
 
         depth_img = cv2.applyColorMap((depth * (1/depth.max()*255)).astype(np.uint8), cv2.COLORMAP_JET)
         cv2.imwrite(f'{output_dir}/depth y({y}) block_size({block_size}).png', depth_img)
 
-        write_ply(f'{output_dir}/pointcloud y({y}) block_size({block_size}).ply', img1, depth*8)
+        write_ply(f'{output_dir}/pointcloud y({y}) block_size({block_size}).ply', img1, depth)
 
+        # Exercise 3
 
+        stereo = cv2.StereoSGBM_create(minDisparity=min_disp, numDisparities=num_disp, blockSize=block_size,
+                                       speckleWindowSize=100, speckleRange=1)
+        disparity = stereo.compute(img1, img2).astype(np.float32) / y
+
+        disparity_img = cv2.applyColorMap(disparity.astype(np.uint8), cv2.COLORMAP_JET)
+        cv2.imwrite(f'{output_dir}/reduced noise disparity y({y}) block_size({block_size}).png', disparity_img)
+
+        ftx = np.full(disparity.shape, f * tx, dtype=np.float32)
+        # ftx/disparity but set to zero where division by zero would occur
+        depth = np.divide(ftx, disparity, out=np.zeros_like(ftx), where=disparity != 0)
+
+        depth_img = cv2.applyColorMap((depth * (1 / depth.max() * 255)).astype(np.uint8), cv2.COLORMAP_JET)
+        cv2.imwrite(f'{output_dir}/reduced noise depth y({y}) block_size({block_size}).png', depth_img)
+
+        write_ply(f'{output_dir}/reduced noise pointcloud y({y}) block_size({block_size}).ply', img1, depth)
 
 
 
