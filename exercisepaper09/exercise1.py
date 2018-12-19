@@ -22,14 +22,20 @@ end_header
 
 
 def write_ply(file, img, depth):
-
+    height = img.shape[0]
     with open(file, 'w') as f:
 
         result = []
-        for (y, (img_row, depth_row)) in enumerate(zip(img, depth)):
-            for (x, (color, z)) in enumerate(zip(img_row, depth_row)):
+        height = img.shape[0]
+        for y in range(0, img.shape[0]):
+            for x in range(0, img.shape[1]):
+                color = img[y][x]
+                z = depth[y][x]
+                Y = height - y
                 if z != 0:
-                    result.append([x, y, z, color[2], color[1], color[0]])
+                    X = ((x - cx) * z) / fx
+                    Y = ((Y - cy) * z) / fy
+                    result.append([X, Y, -z, color[2], color[1], color[0]])
 
         f.write(ply_header % dict(vert_num=len(result)))
         np.savetxt(f, result, '%f %f %f %d %d %d')
@@ -50,8 +56,8 @@ tx = baseline = 0.54  # meter
 
 # Exercise 1
 
-for y in [4]:  # [4, 5, 6]:
-    for block_size in [12]:  # [4, 8, 12, 16]:
+for y in [4, 5, 6]:
+    for block_size in [4, 8, 12, 16]:
         min_disp = 1 # 0-10 Gibt minimale Disparität an
         num_disp = 16 * y # Gibt maxinale Disparität an; immer vielfaches von 16
         print(f"y({y}) block_size({block_size})")
